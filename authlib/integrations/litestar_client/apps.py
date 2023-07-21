@@ -33,7 +33,7 @@ class LitestarAppMixin(object):
             redirect_uri = str(redirect_uri)
         rv = await self.create_authorization_url(redirect_uri, **kwargs)
         await self.save_authorize_data(request, redirect_uri=redirect_uri, **rv)
-        return Redirect(rv["url"], status_code=302)
+        return Redirect(path=rv["url"], status_code=302)
 
 
 class LitestarOAuth1App(LitestarAppMixin, AsyncOAuth1Mixin, BaseApp):
