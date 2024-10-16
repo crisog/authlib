@@ -15,10 +15,10 @@ from .models import db, User, Client, Token
 
 
 def token_generator(client, grant_type, user=None, scope=None):
-    token = '{}-{}'.format(client.client_id[0], grant_type)
+    token = f'{client.client_id[0]}-{grant_type}'
     if user:
-        token = '{}.{}'.format(token, user.get_user_id())
-    return '{}.{}'.format(token, generate_token(32))
+        token = f'{token}.{user.get_user_id()}'
+    return f'{token}.{generate_token(32)}'
 
 
 def create_authorization_server(app, lazy=False):
@@ -36,7 +36,7 @@ def create_authorization_server(app, lazy=False):
         if request.method == 'GET':
             user_id = request.args.get('user_id')
             if user_id:
-                end_user = User.query.get(int(user_id))
+                end_user = db.session.get(User, int(user_id))
             else:
                 end_user = None
             try:
@@ -46,7 +46,7 @@ def create_authorization_server(app, lazy=False):
                 return url_encode(error.get_body())
         user_id = request.form.get('user_id')
         if user_id:
-            grant_user = User.query.get(int(user_id))
+            grant_user = db.session.get(User, int(user_id))
         else:
             grant_user = None
         return server.create_authorization_response(grant_user=grant_user)
@@ -92,6 +92,6 @@ class TestCase(unittest.TestCase):
         os.environ.pop('AUTHLIB_INSECURE_TRANSPORT')
 
     def create_basic_header(self, username, password):
-        text = '{}:{}'.format(username, password)
+        text = f'{username}:{password}'
         auth = to_unicode(base64.b64encode(to_bytes(text)))
         return {'Authorization': 'Basic ' + auth}

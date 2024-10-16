@@ -17,7 +17,7 @@ DEFAULT_HEADERS = {
 }
 
 
-class OAuth2Client(object):
+class OAuth2Client:
     """Construct a new OAuth 2 protocol client.
 
     :param session: Requests session object to communicate with
@@ -38,6 +38,9 @@ class OAuth2Client(object):
         values: "header", "body", "uri".
     :param update_token: A function for you to update token. It accept a
         :class:`OAuth2Token` as parameter.
+    :param leeway: Time window in seconds before the actual expiration of the
+        authentication token, that the token is considered expired and will
+        be refreshed.
     """
     client_auth_class = ClientAuth
     token_auth_class = TokenAuth
@@ -52,7 +55,8 @@ class OAuth2Client(object):
                  token_endpoint_auth_method=None,
                  revocation_endpoint_auth_method=None,
                  scope=None, state=None, redirect_uri=None, code_challenge_method=None,
-                 token=None, token_placement='header', update_token=None, **metadata):
+                 token=None, token_placement='header', update_token=None, leeway=60,
+                 **metadata):
 
         self.session = session
         self.client_id = client_id
@@ -96,6 +100,8 @@ class OAuth2Client(object):
             'introspect_token_request': set(),
         }
         self._auth_methods = {}
+
+        self.leeway = leeway
 
     def register_client_auth_method(self, auth):
         """Extend client authenticate for token endpoint.
@@ -193,6 +199,10 @@ class OAuth2Client(object):
         if grant_type is None:
             grant_type = self.metadata.get('grant_type')
 
+        if grant_type is None:
+            grant_type = _guess_grant_type(kwargs)
+            self.metadata['grant_type'] = grant_type
+
         body = self._prepare_token_endpoint_body(body, grant_type, **kwargs)
 
         if auth is None:
@@ -219,7 +229,7 @@ class OAuth2Client(object):
         self.token = token
         return token
 
-    def refresh_token(self, url, refresh_token=None, body='',
+    def refresh_token(self, url=None, refresh_token=None, body='',
                       auth=None, headers=None, **kwargs):
         """Fetch a new access token using a refresh token.
 
@@ -243,6 +253,9 @@ class OAuth2Client(object):
         if headers is None:
             headers = DEFAULT_HEADERS.copy()
 
+        if url is None:
+            url = self.metadata.get('token_endpoint')
+
         for hook in self.compliance_hook['refresh_token_request']:
             url, headers, body = hook(url, headers, body)
 
@@ -253,8 +266,10 @@ class OAuth2Client(object):
             url, refresh_token=refresh_token, body=body, headers=headers,
             auth=auth, **session_kwargs)
 
-    def ensure_active_token(self, token):
-        if not token.is_expired():
+    def ensure_active_token(self, token=None):
+        if token is None:
+            token = self.token
+        if not token.is_expired(leeway=self.leeway):
             return True
         refresh_token = token.get('refresh_token')
         url = self.metadata.get('token_endpoint')
@@ -401,9 +416,6 @@ class OAuth2Client(object):
             url, body, auth=auth, headers=headers, **session_kwargs)
 
     def _prepare_token_endpoint_body(self, body, grant_type, **kwargs):
-        if grant_type is None:
-            grant_type = _guess_grant_type(kwargs)
-
         if grant_type == 'authorization_code':
             if 'redirect_uri' not in kwargs:
                 kwargs['redirect_uri'] = self.redirect_uri

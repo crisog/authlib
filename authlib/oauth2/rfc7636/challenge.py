@@ -9,6 +9,7 @@ from ..rfc6749 import (
 
 
 CODE_VERIFIER_PATTERN = re.compile(r'^[a-zA-Z0-9\-._~]{43,128}$')
+CODE_CHALLENGE_PATTERN = re.compile(r'^[a-zA-Z0-9\-._~]{43,128}$')
 
 
 def create_s256_code_challenge(code_verifier):
@@ -28,7 +29,7 @@ def compare_s256_code_challenge(code_verifier, code_challenge):
     return create_s256_code_challenge(code_verifier) == code_challenge
 
 
-class CodeChallenge(object):
+class CodeChallenge:
     """CodeChallenge extension to Authorization Code Grant. It is used to
     improve the security of Authorization Code flow for public clients by
     sending extra "code_challenge" and "code_verifier" to the authorization
@@ -76,8 +77,17 @@ class CodeChallenge(object):
         if not challenge:
             raise InvalidRequestError('Missing "code_challenge"')
 
+        if len(request.datalist.get('code_challenge', [])) > 1:
+            raise InvalidRequestError('Multiple "code_challenge" in request.')
+
+        if not CODE_CHALLENGE_PATTERN.match(challenge):
+            raise InvalidRequestError('Invalid "code_challenge"')
+
         if method and method not in self.SUPPORTED_CODE_CHALLENGE_METHOD:
             raise InvalidRequestError('Unsupported "code_challenge_method"')
+
+        if len(request.datalist.get('code_challenge_method', [])) > 1:
+            raise InvalidRequestError('Multiple "code_challenge_method" in request.')
 
     def validate_code_verifier(self, grant):
         request: OAuth2Request = grant.request
@@ -108,7 +118,7 @@ class CodeChallenge(object):
 
         func = self.CODE_CHALLENGE_METHODS.get(method)
         if not func:
-            raise RuntimeError('No verify method for "{}"'.format(method))
+            raise RuntimeError(f'No verify method for "{method}"')
 
         # If the values are not equal, an error response indicating
         # "invalid_grant" MUST be returned.

@@ -1,3 +1,4 @@
+from authlib.common.errors import ContinueIteration
 from .authenticate_client import ClientAuthentication
 from .requests import OAuth2Request, JsonRequest
 from .errors import (
@@ -9,7 +10,7 @@ from .errors import (
 from .util import scope_to_list
 
 
-class AuthorizationServer(object):
+class AuthorizationServer:
     """Authorization server that handles Authorization Endpoint and Token
     Endpoint.
 
@@ -178,15 +179,21 @@ class AuthorizationServer(object):
         if hasattr(grant_cls, 'check_token_endpoint'):
             self._token_grants.append((grant_cls, extensions))
 
-    def register_endpoint(self, endpoint_cls):
+    def register_endpoint(self, endpoint):
         """Add extra endpoint to authorization server. e.g.
         RevocationEndpoint::
 
             authorization_server.register_endpoint(RevocationEndpoint)
 
-        :param endpoint_cls: A endpoint class
+        :param endpoint_cls: A endpoint class or instance.
         """
-        self._endpoints[endpoint_cls.ENDPOINT_NAME] = endpoint_cls(self)
+        if isinstance(endpoint, type):
+            endpoint = endpoint(self)
+        else:
+            endpoint.server = self
+
+        endpoints = self._endpoints.setdefault(endpoint.ENDPOINT_NAME, [])
+        endpoints.append(endpoint)
 
     def get_authorization_grant(self, request):
         """Find the authorization grant for current request.
@@ -207,6 +214,7 @@ class AuthorizationServer(object):
         request.user = end_user
 
         grant = self.get_authorization_grant(request)
+        grant.validate_no_multiple_request_parameter(request)
         grant.validate_consent_request()
         return grant
 
@@ -231,12 +239,15 @@ class AuthorizationServer(object):
         if name not in self._endpoints:
             raise RuntimeError(f'There is no "{name}" endpoint.')
 
-        endpoint = self._endpoints[name]
-        request = endpoint.create_endpoint_request(request)
-        try:
-            return self.handle_response(*endpoint(request))
-        except OAuth2Error as error:
-            return self.handle_error_response(request, error)
+        endpoints = self._endpoints[name]
+        for endpoint in endpoints:
+            request = endpoint.create_endpoint_request(request)
+            try:
+                return self.handle_response(*endpoint(request))
+            except ContinueIteration:
+                continue
+            except OAuth2Error as error:
+                return self.handle_error_response(request, error)
 
     def create_authorization_response(self, request=None, grant_user=None):
         """Validate authorization request and create authorization response.

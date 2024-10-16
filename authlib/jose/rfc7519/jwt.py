@@ -13,7 +13,7 @@ from ..rfc7516 import JsonWebEncryption
 from ..rfc7517 import KeySet, Key
 
 
-class JsonWebToken(object):
+class JsonWebToken:
     SENSITIVE_NAMES = ('password', 'token', 'secret', 'secret_key')
     # Thanks to sentry SensitiveDataFilter
     SENSITIVE_VALUES = re.compile(r'|'.join([
@@ -50,7 +50,7 @@ class JsonWebToken(object):
         :param check: check if sensitive data in payload
         :return: bytes
         """
-        header['typ'] = 'JWT'
+        header.setdefault('typ', 'JWT')
 
         for k in ['exp', 'iat', 'nbf']:
             # convert datetime into timestamp
@@ -167,9 +167,16 @@ def create_load_key(key):
         if isinstance(key, dict) and 'keys' in key:
             keys = key['keys']
             kid = header.get('kid')
-            for k in keys:
-                if k.get('kid') == kid:
-                    return k
+
+            if kid is not None:
+                # look for the requested key
+                for k in keys:
+                    if k.get('kid') == kid:
+                        return k
+            else:
+                # use the only key
+                if len(keys) == 1:
+                    return keys[0]
             raise ValueError('Invalid JSON Web Key Set')
         return key
 

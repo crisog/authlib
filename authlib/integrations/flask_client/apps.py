@@ -6,10 +6,10 @@ from ..base_client import (
 )
 
 
-class FlaskAppMixin(object):
+class FlaskAppMixin:
     @property
     def token(self):
-        attr = '_oauth_token_{}'.format(self.name)
+        attr = f'_oauth_token_{self.name}'
         token = g.get(attr)
         if token:
             return token
@@ -20,7 +20,7 @@ class FlaskAppMixin(object):
 
     @token.setter
     def token(self, token):
-        attr = '_oauth_token_{}'.format(self.name)
+        attr = f'_oauth_token_{self.name}'
         setattr(g, attr, token)
 
     def _get_requested_token(self, *args, **kwargs):
@@ -85,12 +85,12 @@ class FlaskOAuth2App(FlaskAppMixin, OAuth2Mixin, OpenIDMixin, BaseApp):
                 raise OAuthError(error=error, description=description)
 
             params = {
-                'code': request.args['code'],
+                'code': request.args.get('code'),
                 'state': request.args.get('state'),
             }
         else:
             params = {
-                'code': request.form['code'],
+                'code': request.form.get('code'),
                 'state': request.form.get('state'),
             }
 

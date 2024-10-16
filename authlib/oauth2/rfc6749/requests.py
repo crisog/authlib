@@ -1,9 +1,12 @@
+from collections import defaultdict
+from typing import DefaultDict
+
 from authlib.common.encoding import json_loads
 from authlib.common.urls import urlparse, url_decode
 from .errors import InsecureTransportError
 
 
-class OAuth2Request(object):
+class OAuth2Request:
     def __init__(self, method: str, uri: str, body=None, headers=None):
         InsecureTransportError.check(uri)
         #: HTTP method
@@ -20,10 +23,13 @@ class OAuth2Request(object):
         self.refresh_token = None
         self.credential = None
 
+        self._parsed_query = None
+
     @property
     def args(self):
-        query = urlparse.urlparse(self.uri).query
-        return dict(url_decode(query))
+        if self._parsed_query is None:
+            self._parsed_query = url_decode(urlparse.urlparse(self.uri).query)
+        return dict(self._parsed_query)
 
     @property
     def form(self):
@@ -35,6 +41,19 @@ class OAuth2Request(object):
         data.update(self.args)
         data.update(self.form)
         return data
+
+    @property
+    def datalist(self) -> DefaultDict[str, list]:
+        """ Return all the data in query parameters and the body of the request as a dictionary with all the values
+        in lists. """
+        if self._parsed_query is None:
+            self._parsed_query = url_decode(urlparse.urlparse(self.uri).query)
+        values = defaultdict(list)
+        for k, v in self._parsed_query:
+            values[k].append(v)
+        for k, v in self.form.items():
+            values[k].append(v)
+        return values
 
     @property
     def client_id(self) -> str:
@@ -72,7 +91,7 @@ class OAuth2Request(object):
         return self.data.get('state')
 
 
-class JsonRequest(object):
+class JsonRequest:
     def __init__(self, method, uri, body=None, headers=None):
         self.method = method
         self.uri = uri

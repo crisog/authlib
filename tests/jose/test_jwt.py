@@ -1,7 +1,7 @@
-import unittest
 import datetime
-from authlib.jose import errors
-from authlib.jose import JsonWebToken, JWTClaims, jwt
+import unittest
+
+from authlib.jose import JsonWebKey, JsonWebToken, JWTClaims, errors, jwt
 from authlib.jose.errors import UnsupportedAlgorithmError
 from tests.util import read_file_path
 
@@ -147,6 +147,40 @@ class JWTTest(unittest.TestCase):
             claims.validate, 123
         )
 
+    def test_validate_iat_issued_in_future(self):
+        in_future = datetime.datetime.utcnow() + datetime.timedelta(seconds=10)
+        id_token = jwt.encode({'alg': 'HS256'}, {'iat': in_future}, 'k')
+        claims = jwt.decode(id_token, 'k')
+        with self.assertRaises(errors.InvalidTokenError) as error_ctx:
+            claims.validate()
+        self.assertEqual(
+            str(error_ctx.exception),
+            'invalid_token: The token is not valid as it was issued in the future'
+        )
+
+    def test_validate_iat_issued_in_future_with_insufficient_leeway(self):
+        in_future = datetime.datetime.utcnow() + datetime.timedelta(seconds=10)
+        id_token = jwt.encode({'alg': 'HS256'}, {'iat': in_future}, 'k')
+        claims = jwt.decode(id_token, 'k')
+        with self.assertRaises(errors.InvalidTokenError) as error_ctx:
+            claims.validate(leeway=5)
+        self.assertEqual(
+            str(error_ctx.exception),
+            'invalid_token: The token is not valid as it was issued in the future'
+        )
+
+    def test_validate_iat_issued_in_future_with_sufficient_leeway(self):
+        in_future = datetime.datetime.utcnow() + datetime.timedelta(seconds=10)
+        id_token = jwt.encode({'alg': 'HS256'}, {'iat': in_future}, 'k')
+        claims = jwt.decode(id_token, 'k')
+        claims.validate(leeway=20)
+
+    def test_validate_iat_issued_in_past(self):
+        in_future = datetime.datetime.utcnow() - datetime.timedelta(seconds=10)
+        id_token = jwt.encode({'alg': 'HS256'}, {'iat': in_future}, 'k')
+        claims = jwt.decode(id_token, 'k')
+        claims.validate()
+
     def test_validate_iat(self):
         id_token = jwt.encode({'alg': 'HS256'}, {'iat': 'invalid'}, 'k')
         claims = jwt.decode(id_token, 'k')
@@ -213,6 +247,32 @@ class JWTTest(unittest.TestCase):
         data = jwt.encode(header, payload, private_key)
         self.assertEqual(data.count(b'.'), 2)
         claims = jwt.decode(data, pub_key)
+        self.assertEqual(claims['name'], 'hi')
+
+    def test_use_jwks_single_kid(self):
+        """Test that jwks can be decoded if a kid for decoding is given
+        and encoded data has no kid and only one key is set."""
+        header = {'alg': 'RS256'}
+        payload = {'name': 'hi'}
+        private_key = read_file_path('jwks_single_private.json')
+        pub_key = read_file_path('jwks_single_public.json')
+        data = jwt.encode(header, payload, private_key)
+        self.assertEqual(data.count(b'.'), 2)
+        claims = jwt.decode(data, pub_key)
+        self.assertEqual(claims['name'], 'hi')
+
+    # Added a unit test to showcase my problem. 
+    # This calls jwt.decode similarly as is done in parse_id_token method of the AsyncOpenIDMixin class when the id token does not contain a kid in the alg header.
+    def test_use_jwks_single_kid_keyset(self):
+        """Thest that jwks can be decoded if a kid for decoding is given
+        and encoded data has no kid and a keyset with one key."""
+        header = {'alg': 'RS256'}
+        payload = {'name': 'hi'}
+        private_key = read_file_path('jwks_single_private.json')
+        pub_key = read_file_path('jwks_single_public.json')
+        data = jwt.encode(header, payload, private_key)
+        self.assertEqual(data.count(b'.'), 2)
+        claims = jwt.decode(data, JsonWebKey.import_key_set(pub_key))
         self.assertEqual(claims['name'], 'hi')
 
     def test_with_ec(self):

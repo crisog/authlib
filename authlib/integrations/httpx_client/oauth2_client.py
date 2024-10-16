@@ -32,7 +32,7 @@ class OAuth2Auth(Auth, TokenAuth):
             headers['Content-Length'] = str(len(body))
             yield build_request(url=url, headers=headers, body=body, initial_request=request)
         except KeyError as error:
-            description = 'Unsupported token_type: {}'.format(str(error))
+            description = f'Unsupported token_type: {str(error)}'
             raise UnsupportedTokenTypeError(description=description)
 
 
@@ -58,7 +58,7 @@ class AsyncOAuth2Client(_OAuth2Client, httpx.AsyncClient):
                  revocation_endpoint_auth_method=None,
                  scope=None, redirect_uri=None,
                  token=None, token_placement='header',
-                 update_token=None, **kwargs):
+                 update_token=None, leeway=60, **kwargs):
 
         # extract httpx.Client kwargs
         client_kwargs = self._extract_session_request_params(kwargs)
@@ -75,7 +75,7 @@ class AsyncOAuth2Client(_OAuth2Client, httpx.AsyncClient):
             revocation_endpoint_auth_method=revocation_endpoint_auth_method,
             scope=scope, redirect_uri=redirect_uri,
             token=token, token_placement=token_placement,
-            update_token=update_token, **kwargs
+            update_token=update_token, leeway=leeway, **kwargs
         )
 
     async def request(self, method, url, withhold_token=False, auth=USE_CLIENT_DEFAULT, **kwargs):
@@ -87,7 +87,7 @@ class AsyncOAuth2Client(_OAuth2Client, httpx.AsyncClient):
 
             auth = self.token_auth
 
-        return await super(AsyncOAuth2Client, self).request(
+        return await super().request(
             method, url, auth=auth, **kwargs)
 
     @asynccontextmanager
@@ -100,13 +100,13 @@ class AsyncOAuth2Client(_OAuth2Client, httpx.AsyncClient):
 
             auth = self.token_auth
 
-        async with super(AsyncOAuth2Client, self).stream(
+        async with super().stream(
             method, url, auth=auth, **kwargs) as resp:
             yield resp
 
     async def ensure_active_token(self, token):
         async with self._token_refresh_lock:
-            if self.token.is_expired():
+            if self.token.is_expired(leeway=self.leeway):
                 refresh_token = token.get('refresh_token')
                 url = self.metadata.get('token_endpoint')
                 if refresh_token and url:
@@ -203,7 +203,7 @@ class OAuth2Client(_OAuth2Client, httpx.Client):
 
             auth = self.token_auth
 
-        return super(OAuth2Client, self).request(
+        return super().request(
             method, url, auth=auth, **kwargs)
 
     def stream(self, method, url, withhold_token=False, auth=USE_CLIENT_DEFAULT, **kwargs):
@@ -216,5 +216,5 @@ class OAuth2Client(_OAuth2Client, httpx.Client):
 
             auth = self.token_auth
 
-        return super(OAuth2Client, self).stream(
+        return super().stream(
             method, url, auth=auth, **kwargs)

@@ -1,7 +1,7 @@
 from authlib.common.encoding import json_dumps
 
 
-class KeySet(object):
+class KeySet:
     """This class represents a JSON Web Key Set."""
 
     def __init__(self, keys):
@@ -23,6 +23,9 @@ class KeySet(object):
         :return: Key instance
         :raise: ValueError
         """
+        # Proposed fix, feel free to do something else but the idea is that we take the only key of the set if no kid is specified
+        if kid is None and len(self.keys) == 1:
+            return self.keys[0]
         for k in self.keys:
             if k.kid == kid:
                 return k

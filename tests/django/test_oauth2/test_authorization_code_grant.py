@@ -24,7 +24,7 @@ class AuthorizationCodeGrant(CodeGrantMixin, grants.AuthorizationCodeGrant):
 
 class AuthorizationCodeTest(TestCase):
     def create_server(self):
-        server = super(AuthorizationCodeTest, self).create_server()
+        server = super().create_server()
         server.register_grant(AuthorizationCodeGrant)
         return server
 
@@ -64,6 +64,14 @@ class AuthorizationCodeTest(TestCase):
         self.prepare_data(response_type='')
         self.assertRaises(
             errors.UnauthorizedClientError,
+            server.get_consent_grant,
+            request
+        )
+
+        url = '/authorize?response_type=code&client_id=client&scope=profile&state=bar&redirect_uri=https%3A%2F%2Fa.b&response_type=code'
+        request = self.factory.get(url)
+        self.assertRaises(
+            errors.InvalidRequestError,
             server.get_consent_grant,
             request
         )
